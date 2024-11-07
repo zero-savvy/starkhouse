@@ -1,5 +1,5 @@
 
-#[starknet::interface]
+// #[starknet::interface]
 //trait IImageProver<TContractState> {
 //    fn prove(self: @TContractState, orig_image: StructImage) -> felt252;
 //}
