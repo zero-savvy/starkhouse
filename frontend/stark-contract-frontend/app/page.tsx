@@ -1,31 +1,47 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Cpu, Upload, Download, ImageIcon, ZapOff } from 'lucide-react'
+import { Contract, RpcProvider, Account, ec, json, constants } from 'starknet'
 
-// Placeholder for Starknet contract interaction
-const contractInteraction = {
-  proveImage: async (jsonData: any) => {
-    console.log('Proving image:', jsonData)
-    return { success: true, message: 'Image proved successfully' }
-  },
-  verifyImage: async (jsonData: any) => {
-    console.log('Verifying image:', jsonData)
-    return { success: true, message: 'Image verified successfully' }
-  }
-}
+const contractAddress = '0x05c4a9b0230fff7c24871a2f64940a25e120286a2e0507d37e19a910055b6ac7'
+const provider = new RpcProvider({ nodeUrl: 'https://starknet-sepolia.public.blastapi.io' })
+const privateKey = '0x03449dc0ea11ff93b9f8095a88cc6400d81df63578fb9287323368c0ca3abfe0'
+const accountAddress = "0x0407D72924f4fcF8C119f4Bc1C026f98cEfBf35D7804b56Dbd599b39310d0650"
+let contract: Contract
+let account: Account
 
-export default function Component() {
+export default function StarknetImageProver() {
   const [proveImage, setProveImage] = useState<string | null>(null)
   const [verifyImage, setVerifyImage] = useState<string | null>(null)
   const [proveResult, setProveResult] = useState<string | null>(null)
   const [verifyResult, setVerifyResult] = useState<string | null>(null)
   const [grayscaleImage, setGrayscaleImage] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const initializeContract = async () => {
+      try {
+        const { abi } = await provider.getClassAt(contractAddress)
+        if (abi) {
+          contract = new Contract(abi, contractAddress, provider)
+          account = new Account(provider, accountAddress, privateKey)
+          
+          // Connect the account to the contract
+          contract.connect(account)
+        } else {
+          console.error("ABI not found for the contract")
+        }
+      } catch (error) {
+        console.error("Failed to initialize contract:", error)
+      }
+    }
+    initializeContract()
+  }, [])
 
   const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<string> => {
     return new Promise((resolve) => {
@@ -59,7 +75,7 @@ export default function Component() {
 
   const handleProveUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const resizedImage = await resizeImage(e.target.files[0], 300, 300)
+      const resizedImage = await resizeImage(e.target.files[0], 30, 30)
       setProveImage(resizedImage)
     }
   }
@@ -72,54 +88,51 @@ export default function Component() {
     }
   }
 
-  const createJsonFromImage = (): { R: number[], G: number[], B: number[], Grayscale?: number[] } => {
+  const createJsonFromImage = (): { width: number, height: number, R: number[], G: number[], B: number[], Gray: number[] } => {
     const canvas = canvasRef.current!
     const ctx = canvas.getContext('2d')!
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const data = imageData.data
-    const R = [], G = [], B = [], Grayscale = []
+    const R = [], G = [], B = [], Gray = []
 
     for (let i = 0; i < data.length; i += 4) {
       R.push(data[i])
       G.push(data[i + 1])
       B.push(data[i + 2])
-      if (grayscaleImage) {
-        const avg = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3)
-        Grayscale.push(avg)
-      }
+      const grayValue = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3)
+      Gray.push(grayValue)
     }
 
-    return grayscaleImage ? { R, G, B, Grayscale } : { R, G, B }
+    return { width: canvas.width, height: canvas.height, R, G, B, Gray }
   }
 
   const handleProve = async () => {
-    const jsonData = createJsonFromImage()
-    const result = await contractInteraction.proveImage(jsonData)
-    setProveResult(result.message)
+    if (!proveImage) return
+    const { width, height, R, G, B } = createJsonFromImage()
+    try {
+      const result = await contract.prove(width, height, R, G, B)
+      setProveResult(`Image proved successfully. Transaction hash: ${result.transaction_hash}`)
+    } catch (error) {
+      console.error("Error proving image:", error)
+      setProveResult("Failed to prove image. Check console for details.")
+    }
   }
 
   const handleVerify = async () => {
     if (!verifyImage) return
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')!
-    const img = new Image()
-    img.onload = async () => {
-      canvas.width = img.width
-      canvas.height = img.height
-      ctx.drawImage(img, 0, 0)
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const data = imageData.data
-      const R = [], G = [], B = []
-      for (let i = 0; i < data.length; i += 4) {
-        R.push(data[i])
-        G.push(data[i + 1])
-        B.push(data[i + 2])
+    const { width, height, Gray } = createJsonFromImage()
+    try {
+      const hashResult = await contract.image_hash_grayscale(width, height, Gray)
+      const verifyResult = await contract.is_verified_get_owner(hashResult.hash)
+      if (verifyResult.owner !== '0x0') {
+        setVerifyResult(`Image verified. Owner: ${verifyResult.owner}`)
+      } else {
+        setVerifyResult("Image not verified or not found.")
       }
-      const jsonData = { R, G, B }
-      const result = await contractInteraction.verifyImage(jsonData)
-      setVerifyResult(result.message)
+    } catch (error) {
+      console.error("Error verifying image:", error)
+      setVerifyResult("Failed to verify image. Check console for details.")
     }
-    img.src = verifyImage
   }
 
   const handleDownload = () => {
