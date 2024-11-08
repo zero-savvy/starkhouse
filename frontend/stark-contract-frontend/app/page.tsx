@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { Cpu, Upload, Download, ImageIcon, ZapOff } from 'lucide-react'
 import { Contract, RpcProvider, Account, ec, json, constants } from 'starknet'
 
-const contractAddress = '0x05c4a9b0230fff7c24871a2f64940a25e120286a2e0507d37e19a910055b6ac7'
+const contractAddress = '0x02581d50b8bc6d2fde6970580a81da0ed272b471afc5e83c73d6d5e351e895ff'
 const provider = new RpcProvider({ nodeUrl: 'https://starknet-sepolia.public.blastapi.io' })
 const privateKey = '0x03449dc0ea11ff93b9f8095a88cc6400d81df63578fb9287323368c0ca3abfe0'
 const accountAddress = "0x0407D72924f4fcF8C119f4Bc1C026f98cEfBf35D7804b56Dbd599b39310d0650"
@@ -29,7 +29,7 @@ export default function StarknetImageProver() {
         const { abi } = await provider.getClassAt(contractAddress)
         if (abi) {
           contract = new Contract(abi, contractAddress, provider)
-          account = new Account(provider, accountAddress, privateKey)
+          account = new Account(provider, accountAddress, privateKey, undefined, "0x3")
           
           // Connect the account to the contract
           contract.connect(account)
@@ -75,16 +75,18 @@ export default function StarknetImageProver() {
 
   const handleProveUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const resizedImage = await resizeImage(e.target.files[0], 30, 30)
+      const resizedImage = await resizeImage(e.target.files[0], 40, 40)
       setProveImage(resizedImage)
     }
   }
 
-  const handleVerifyUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVerifyUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader()
-      reader.onload = (e) => setVerifyImage(e.target?.result as string)
-      reader.readAsDataURL(e.target.files[0])
+      // const reader = new FileReader()
+      // reader.onload = (e) => setVerifyImage(e.target?.result as string)
+      // reader.readAsDataURL(e.target.files[0])
+      const resizedImage = await resizeImage(e.target.files[0], 40, 40)
+      setVerifyImage(resizedImage)
     }
   }
 
@@ -96,11 +98,15 @@ export default function StarknetImageProver() {
     const R = [], G = [], B = [], Gray = []
 
     for (let i = 0; i < data.length; i += 4) {
-      R.push(data[i])
+      R.push(data[i+3])
       G.push(data[i + 1])
       B.push(data[i + 2])
-      const grayValue = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3)
-      Gray.push(grayValue)
+      if (data[i] == data[i + 1] && data[i + 1] == data[i + 2]) {
+        Gray.push(data[i])
+      } else {
+        const grayValue = Math.floor((data[i] + data[i + 1] + data[i + 2]) / 3)
+        Gray.push(grayValue)
+      }
     }
 
     return { width: canvas.width, height: canvas.height, R, G, B, Gray }
@@ -108,7 +114,7 @@ export default function StarknetImageProver() {
 
   const handleProve = async () => {
     if (!proveImage) return
-    const { width, height, R, G, B } = createJsonFromImage()
+    const { width, height, R, G, B , Gray} = createJsonFromImage()
     try {
       const result = await contract.prove(width, height, R, G, B)
       setProveResult(`Image proved successfully. Transaction hash: ${result.transaction_hash}`)
@@ -123,9 +129,10 @@ export default function StarknetImageProver() {
     const { width, height, Gray } = createJsonFromImage()
     try {
       const hashResult = await contract.image_hash_grayscale(width, height, Gray)
-      const verifyResult = await contract.is_verified_get_owner(hashResult.hash)
-      if (verifyResult.owner !== '0x0') {
-        setVerifyResult(`Image verified. Owner: ${verifyResult.owner}`)
+      
+      const verifyResult = await contract.is_verified_get_owner(hashResult)
+      if (verifyResult != 0) {
+        setVerifyResult(`Image verified. Owner: 0x${verifyResult.toString(16)}`)
       } else {
         setVerifyResult("Image not verified or not found.")
       }
@@ -161,7 +168,7 @@ export default function StarknetImageProver() {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const data = imageData.data
       for (let i = 0; i < data.length; i += 4) {
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
+        const avg = Math.floor((data[i] + data[i + 1] + data[i + 2]) / 3)
         data[i] = data[i + 1] = data[i + 2] = avg
       }
       ctx.putImageData(imageData, 0, 0)

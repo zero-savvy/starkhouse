@@ -65,6 +65,30 @@ mod ImageProver {
     }
 
     #[external(v0)]
+    fn calc_grayscale(self: @ContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>) -> Array<u8> {
+
+        let orig_image = StructImage {R: R, G: G, B: B, width: width, height: height};
+
+        let _shift_by32: felt252 = 0x100000000; // 2^32
+        let _shift_by256: felt252 = 0x0100; // 2^8
+        let mut tmp: felt252 = 0;
+        
+        let mut tran_image: Array<u8>  = array![];
+        let mut comp_tran: Array<felt252>  = array![];
+        for i in 0..orig_image.height {
+            for j in 0..orig_image.width {
+                let mut index: usize = (i * orig_image.width + j).try_into().unwrap();
+                tmp *= _shift_by256;
+                let mut tempR: u32 = (*orig_image.R[index]).into();
+                let mut tempG: u32 = (*orig_image.G[index]).into();
+                let mut tempB: u32 = (*orig_image.B[index]).into();
+                let grayval: u32 = (tempR + tempG + tempB) / 3;
+                tran_image.append(grayval.try_into().unwrap());
+            };
+        };
+        tran_image
+    }
+    #[external(v0)]
     fn image_hash_grayscale(self: @ContractState, width: u16, height: u16, Gray: Array<u8>) -> felt252 {
 
         let _shift_by32: felt252 = 0x100000000; // 2^32
@@ -72,25 +96,41 @@ mod ImageProver {
         let mut tmp: felt252 = 0;
         let mut counter: u8 = 0;
 
-        let mut comp_orig: Array<felt252>  = array![];
+        // let mut comp_orig: Array<felt252>  = array![];
+        // for i in 0..height {
+        //     for j in 0..width {
+        //         let mut index: usize = (i * width + j).try_into().unwrap();
+        //         tmp *= _shift_by256;
+        //         let mut tempGray: felt252 = (*Gray[index]).into();
+        //         tmp += tempGray;
+        //         counter += 1;
+        //         if counter == 10 {
+        //             comp_orig.append(tmp);
+        //             tmp = 0;
+        //             counter = 0;
+        //         }
+        //     };
+        // };
+
+        tmp = 0;
+        counter = 0;
+        let mut comp_tran: Array<felt252>  = array![];
         for i in 0..height {
             for j in 0..width {
                 let mut index: usize = (i * width + j).try_into().unwrap();
                 tmp *= _shift_by256;
-                let mut tempGray: felt252 = (*Gray[index]).into();
-                tmp += tempGray;
+                tmp += (*Gray[index]).into();
                 counter += 1;
                 if counter == 10 {
-                    comp_orig.append(tmp);
+                    comp_tran.append(tmp);
                     tmp = 0;
                     counter = 0;
                 }
             };
         };
-
-        let mut hasher_orig = PoseidonTrait::new();   
-        let image_hash = hasher_orig.update(poseidon_hash_span(comp_orig.span())).finalize();
-        image_hash
+        let mut hasher_tran = PoseidonTrait::new();    
+        let tran_image_hash = hasher_tran.update(poseidon_hash_span(comp_tran.span())).finalize();
+        tran_image_hash
     }
 
     #[abi(embed_v0)]
@@ -147,7 +187,7 @@ mod ImageProver {
                     let mut tempR: u32 = (*orig_image.R[index]).into();
                     let mut tempG: u32 = (*orig_image.G[index]).into();
                     let mut tempB: u32 = (*orig_image.B[index]).into();
-                    let grayval: u32 = ((299 * tempR) + (587 * tempG) + (114 * tempB)) / 1000;
+                    let grayval: u32 = (tempR + tempG + tempB) / 3;
                     tran_image.append(grayval.try_into().unwrap());
 
                 };
