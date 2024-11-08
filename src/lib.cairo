@@ -1,1 +1,1 @@
-mod sig_vimz;
+mod vimz;
