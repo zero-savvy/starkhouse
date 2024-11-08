@@ -2,7 +2,7 @@
 trait IImageProver<TContractState> {
     fn prove(ref self: TContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>);
     fn is_verified_get_owner(self: @TContractState, hash: felt252) -> starknet::ContractAddress;
-    fn verify_signature(self: @TContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>, public_key: u256, signature: (u256, u256)) -> bool;
+    fn verify_signature(self: @TContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>, public_key: felt252, signature: (felt252, felt252)) -> bool;
 
     fn image_hash(self: @TContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>) -> felt252;
     
@@ -159,15 +159,12 @@ mod ImageProver {
 
     fn verify_signature(
         self: @ContractState,
-        width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>, public_key: u256, signature: (u256, u256)) -> bool {
-        let (sig_r, sig_s) = signature;
-        let signature_r:felt252 = sig_r.try_into().unwrap();
-        let signature_s:felt252 = sig_s.try_into().unwrap();
-        let public_keyy: felt252 = public_key.try_into().unwrap();
+        width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>, public_key: felt252, signature: (felt252, felt252)) -> bool {
+        let (signature_r, signature_s) = signature;
         let message = self.image_hash(width, height, R, G, B);
         check_ecdsa_signature(
             message_hash: message,
-            public_key: public_keyy,
+            public_key: public_key,
             signature_r: signature_r,
             signature_s: signature_s
         )
