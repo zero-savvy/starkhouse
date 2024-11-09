@@ -6,9 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Cpu, Upload, Download, ImageIcon, ZapOff } from 'lucide-react'
-import { Contract, RpcProvider, Account, ec, json, constants, Uint256 , cairo } from 'starknet'
+import { Contract, RpcProvider, Account, ec, json, constants, Uint256 , cairo, BigNumberish } from 'starknet'
 
-const contractAddress = '0x01ed4e9955ffa136c103b29ca5eb4a3b6b932bc5478d73cd598e6168eecf7652'
+const contractAddress = '0x01924d1af66de92f294e8b53984dc2632d6767f51b14628e8db34869c3f756fb'
 const provider = new RpcProvider({ nodeUrl: 'https://starknet-sepolia.public.blastapi.io' })
 const privateKey = '0x03449dc0ea11ff93b9f8095a88cc6400d81df63578fb9287323368c0ca3abfe0'
 const accountAddress = "0x0407D72924f4fcF8C119f4Bc1C026f98cEfBf35D7804b56Dbd599b39310d0650"
@@ -75,7 +75,8 @@ export default function StarknetImageProver() {
 
   const handleProveUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const resizedImage = await resizeImage(e.target.files[0], 60, 60)
+      const resizedImage = await resizeImage(e.target.files[0], 300, 300)
+      // const resizedImage = await resizeImage(e.target.files[0], 60, 60)
       setProveImage(resizedImage)
     }
   }
@@ -85,16 +86,22 @@ export default function StarknetImageProver() {
       // const reader = new FileReader()
       // reader.onload = (e) => setVerifyImage(e.target?.result as string)
       // reader.readAsDataURL(e.target.files[0])
-      const resizedImage = await resizeImage(e.target.files[0], 60, 60)
+      const resizedImage = await resizeImage(e.target.files[0], 300, 300)
+      // const resizedImage = await resizeImage(e.target.files[0], 60, 60)
       setVerifyImage(resizedImage)
     }
   }
 
-  const createJsonFromImage = (): { width: number, height: number, R: Uint256[], G: Uint256[], B: Uint256[], Gray: Uint256[] } => {
+  const createJsonFromImage = (x: number, y: number): { width: number, height: number, R: BigNumberish[], G: BigNumberish[], B: BigNumberish[], Gray: BigNumberish[] } => {
     const canvas = canvasRef.current!
     const ctx = canvas.getContext('2d')!
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    // let maxWidth = 60
+    // let maxHeight = 60
+    let ww = Math.floor(canvas.width/5)
+    let hh = Math.floor(canvas.height/5) 
+    const imageData = ctx.getImageData(ww * x, hh * y, ww, hh)
     const data = imageData.data
+    
     const R = [], G = [], B = [], Gray = []
     const RC = [], GC = [], BC = [], GrayC = []
 
@@ -123,10 +130,10 @@ export default function StarknetImageProver() {
       Graystr += (Gray[i].toString(16)).slice(-2)
       counter += 1;
       if (counter == 30) {
-        RC.push(cairo.uint256("0x" + Rstr))
-        GrayC.push(cairo.uint256("0x" + Graystr))
-        GC.push(cairo.uint256("0x" + Gstr))
-        BC.push(cairo.uint256("0x" + Bstr))
+        RC.push(cairo.felt("0x" + Rstr))
+        GrayC.push(cairo.felt("0x" + Graystr))
+        GC.push(cairo.felt("0x" + Gstr))
+        BC.push(cairo.felt("0x" + Bstr))
         counter = 0
         Rstr = ""
         Gstr = ""
@@ -135,12 +142,12 @@ export default function StarknetImageProver() {
       }
     }
 
-    return { width: canvas.width, height: canvas.height, R: RC, G: GC, B: BC, Gray: GrayC }
+    return { width: ww, height: hh, R: RC, G: GC, B: BC, Gray: GrayC }
   }
 
   const handleProve = async () => {
     if (!proveImage) return
-    const { width, height, R, G, B , Gray} = createJsonFromImage()
+    const { width, height, R, G, B , Gray} = createJsonFromImage(4,4)
     try {
       const result = await contract.prove(width, height, R, G, B)
       setProveResult(`Image proved successfully. Transaction hash: ${result.transaction_hash}`)
@@ -152,10 +159,10 @@ export default function StarknetImageProver() {
 
   const handleVerify = async () => {
     if (!verifyImage) return
-    const { width, height, Gray } = createJsonFromImage()
+    const { width, height, Gray } = createJsonFromImage(4,4)
     try {
       const hashResult = await contract.image_hash_grayscale(width, height, Gray)
-      
+      // setVerifyResult(`HASH: 0x${hashResult.toString(16)}`)
       const verifyResult = await contract.is_verified_get_owner(hashResult)
       if (verifyResult != 0) {
         setVerifyResult(`Image verified. Owner: 0x${verifyResult.toString(16)}`)

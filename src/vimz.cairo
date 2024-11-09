@@ -1,6 +1,6 @@
 #[starknet::interface]
 trait IImageProver<TContractState> {
-    fn prove(ref self: TContractState, width: u16, height: u16, RC: Array<u256>, GC: Array<u256>, BC: Array<u256>);
+    fn prove(ref self: TContractState, width: u16, height: u16, RC: Array<felt252>, GC: Array<felt252>, BC: Array<felt252>);
     fn is_verified_get_owner(self: @TContractState, hash: felt252) -> starknet::ContractAddress;
 }
 
@@ -89,12 +89,12 @@ mod ImageProver {
         tran_image
     }
     #[external(v0)]
-    fn image_hash_grayscale(self: @ContractState, width: u16, height: u16, GrayC: Array<u256>) -> felt252 {
+    fn image_hash_grayscale(self: @ContractState, width: u16, height: u16, GrayC: Array<felt252>) -> felt252 {
 
         let lenn: usize = 30;
         let mut Gray: Array<u8> = array![];
         for i in 0..(height*width/30) {
-            let mut tmpGray: u256 = *GrayC[i.into()];
+            let mut tmpGray: u256 = (*GrayC[i.into()]).into();
             for _ in 0..lenn {
                 Gray.append((tmpGray % 256).try_into().unwrap());
                 tmpGray /= 256;
@@ -147,16 +147,16 @@ mod ImageProver {
     #[abi(embed_v0)]
     impl ImageProverImpl of super::IImageProver<ContractState> {
         
-        fn prove(ref self: ContractState, width: u16, height: u16, RC: Array<u256>, GC: Array<u256>, BC: Array<u256>) {
+        fn prove(ref self: ContractState, width: u16, height: u16, RC: Array<felt252>, GC: Array<felt252>, BC: Array<felt252>) {
 
             let lenn: usize = 30;
             let mut R: Array<u8> = array![];
             let mut G: Array<u8> = array![];
             let mut B: Array<u8> = array![];
             for i in 0..(height*width/30) {
-                let mut tmpR: u256 = *RC[i.into()];
-                let mut tmpG: u256 = *GC[i.into()];
-                let mut tmpB: u256 = *BC[i.into()];
+                let mut tmpR: u256 = (*RC[i.into()]).into();
+                let mut tmpG: u256 = (*GC[i.into()]).into();
+                let mut tmpB: u256 = (*BC[i.into()]).into();
                 for _ in 0..lenn {
                     R.append((tmpR % 256).try_into().unwrap());
                     tmpR /= 256;
