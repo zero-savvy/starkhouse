@@ -1,6 +1,6 @@
 #[starknet::interface]
 trait IImageProver<TContractState> {
-    fn prove(ref self: TContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>);
+    fn prove(ref self: TContractState, width: u16, height: u16, RC: Array<u256>, GC: Array<u256>, BC: Array<u256>);
     fn is_verified_get_owner(self: @TContractState, hash: felt252) -> starknet::ContractAddress;
 }
 
@@ -82,14 +82,25 @@ mod ImageProver {
                 let mut tempR: u32 = (*orig_image.R[index]).into();
                 let mut tempG: u32 = (*orig_image.G[index]).into();
                 let mut tempB: u32 = (*orig_image.B[index]).into();
-                let grayval: u32 = (tempR + tempG + tempB) / 3;
+                let grayval: u32 = (tempR*299 + tempG*587 + tempB*114) / 1000;
                 tran_image.append(grayval.try_into().unwrap());
             };
         };
         tran_image
     }
     #[external(v0)]
-    fn image_hash_grayscale(self: @ContractState, width: u16, height: u16, Gray: Array<u8>) -> felt252 {
+    fn image_hash_grayscale(self: @ContractState, width: u16, height: u16, GrayC: Array<u256>) -> felt252 {
+
+        let lenn: usize = 30;
+        let mut Gray: Array<u8> = array![];
+        for i in 0..(height*width/30) {
+            let mut tmpGray: u256 = *GrayC[i.into()];
+            for _ in 0..lenn {
+                Gray.append((tmpGray % 256).try_into().unwrap());
+                tmpGray /= 256;
+            }
+        };
+
 
         let _shift_by32: felt252 = 0x100000000; // 2^32
         let _shift_by256: felt252 = 0x0100; // 2^8
@@ -136,7 +147,25 @@ mod ImageProver {
     #[abi(embed_v0)]
     impl ImageProverImpl of super::IImageProver<ContractState> {
         
-        fn prove(ref self: ContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>) {
+        fn prove(ref self: ContractState, width: u16, height: u16, RC: Array<u256>, GC: Array<u256>, BC: Array<u256>) {
+
+            let lenn: usize = 30;
+            let mut R: Array<u8> = array![];
+            let mut G: Array<u8> = array![];
+            let mut B: Array<u8> = array![];
+            for i in 0..(height*width/30) {
+                let mut tmpR: u256 = *RC[i.into()];
+                let mut tmpG: u256 = *GC[i.into()];
+                let mut tmpB: u256 = *BC[i.into()];
+                for _ in 0..lenn {
+                    R.append((tmpR % 256).try_into().unwrap());
+                    tmpR /= 256;
+                    G.append((tmpG % 256).try_into().unwrap());
+                    tmpG /= 256;
+                    B.append((tmpB % 256).try_into().unwrap());
+                    tmpB /= 256;
+                }
+            };
 
             let orig_image = StructImage {R: R, G: G, B: B, width: width, height: height};
 
@@ -187,7 +216,7 @@ mod ImageProver {
                     let mut tempR: u32 = (*orig_image.R[index]).into();
                     let mut tempG: u32 = (*orig_image.G[index]).into();
                     let mut tempB: u32 = (*orig_image.B[index]).into();
-                    let grayval: u32 = (tempR + tempG + tempB) / 3;
+                    let grayval: u32 = (tempR*299 + tempG*587 + tempB*114) / 1000;
                     tran_image.append(grayval.try_into().unwrap());
 
                 };

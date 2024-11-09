@@ -6,9 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Cpu, Upload, Download, ImageIcon, ZapOff } from 'lucide-react'
-import { Contract, RpcProvider, Account, ec, json, constants } from 'starknet'
+import { Contract, RpcProvider, Account, ec, json, constants, Uint256 , cairo } from 'starknet'
 
-const contractAddress = '0x02581d50b8bc6d2fde6970580a81da0ed272b471afc5e83c73d6d5e351e895ff'
+const contractAddress = '0x01ed4e9955ffa136c103b29ca5eb4a3b6b932bc5478d73cd598e6168eecf7652'
 const provider = new RpcProvider({ nodeUrl: 'https://starknet-sepolia.public.blastapi.io' })
 const privateKey = '0x03449dc0ea11ff93b9f8095a88cc6400d81df63578fb9287323368c0ca3abfe0'
 const accountAddress = "0x0407D72924f4fcF8C119f4Bc1C026f98cEfBf35D7804b56Dbd599b39310d0650"
@@ -75,7 +75,7 @@ export default function StarknetImageProver() {
 
   const handleProveUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const resizedImage = await resizeImage(e.target.files[0], 40, 40)
+      const resizedImage = await resizeImage(e.target.files[0], 60, 60)
       setProveImage(resizedImage)
     }
   }
@@ -85,31 +85,57 @@ export default function StarknetImageProver() {
       // const reader = new FileReader()
       // reader.onload = (e) => setVerifyImage(e.target?.result as string)
       // reader.readAsDataURL(e.target.files[0])
-      const resizedImage = await resizeImage(e.target.files[0], 40, 40)
+      const resizedImage = await resizeImage(e.target.files[0], 60, 60)
       setVerifyImage(resizedImage)
     }
   }
 
-  const createJsonFromImage = (): { width: number, height: number, R: number[], G: number[], B: number[], Gray: number[] } => {
+  const createJsonFromImage = (): { width: number, height: number, R: Uint256[], G: Uint256[], B: Uint256[], Gray: Uint256[] } => {
     const canvas = canvasRef.current!
     const ctx = canvas.getContext('2d')!
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const data = imageData.data
     const R = [], G = [], B = [], Gray = []
+    const RC = [], GC = [], BC = [], GrayC = []
 
     for (let i = 0; i < data.length; i += 4) {
-      R.push(data[i+3])
+      R.push(data[i])
       G.push(data[i + 1])
       B.push(data[i + 2])
       if (data[i] == data[i + 1] && data[i + 1] == data[i + 2]) {
         Gray.push(data[i])
       } else {
-        const grayValue = Math.floor((data[i] + data[i + 1] + data[i + 2]) / 3)
+        const grayValue = Math.floor((data[i]*299 + data[i + 1]*587 + data[i + 2]*114) / 1000)
         Gray.push(grayValue)
       }
     }
 
-    return { width: canvas.width, height: canvas.height, R, G, B, Gray }
+    let counter = 0; 
+    let Rstr = ""
+    let Gstr = ""
+    let Bstr = ""
+    let Graystr = ""
+
+    for (let i = 0; i < R.length; i += 1) {
+      Rstr += (R[i].toString(16)).slice(-2)
+      Gstr += (G[i].toString(16)).slice(-2)
+      Bstr += (B[i].toString(16)).slice(-2)
+      Graystr += (Gray[i].toString(16)).slice(-2)
+      counter += 1;
+      if (counter == 30) {
+        RC.push(cairo.uint256("0x" + Rstr))
+        GrayC.push(cairo.uint256("0x" + Graystr))
+        GC.push(cairo.uint256("0x" + Gstr))
+        BC.push(cairo.uint256("0x" + Bstr))
+        counter = 0
+        Rstr = ""
+        Gstr = ""
+        Bstr = ""
+        Graystr = ""
+      }
+    }
+
+    return { width: canvas.width, height: canvas.height, R: RC, G: GC, B: BC, Gray: GrayC }
   }
 
   const handleProve = async () => {
@@ -168,7 +194,7 @@ export default function StarknetImageProver() {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const data = imageData.data
       for (let i = 0; i < data.length; i += 4) {
-        const avg = Math.floor((data[i] + data[i + 1] + data[i + 2]) / 3)
+        const avg = Math.floor((data[i]*299 + data[i + 1]*587 + data[i + 2]*114) / 1000)
         data[i] = data[i + 1] = data[i + 2] = avg
       }
       ctx.putImageData(imageData, 0, 0)
