@@ -1,6 +1,6 @@
 #[starknet::interface]
 trait IImageProver<TContractState> {
-    fn prove(ref self: TContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>);
+    fn prove(ref self: TContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>, public_key: felt252, signature: (felt252, felt252));
     fn is_verified_get_owner(self: @TContractState, hash: felt252) -> starknet::ContractAddress;
     fn verify_signature(self: @TContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>, public_key: felt252, signature: (felt252, felt252)) -> bool;
 
@@ -66,9 +66,15 @@ mod ImageProver {
     #[abi(embed_v0)]
     impl ImageProverImpl of super::IImageProver<ContractState> {
         
-        fn prove(ref self: ContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>) {
+        fn prove(ref self: ContractState, width: u16, height: u16, R: Array<u8>, G: Array<u8>, B: Array<u8>, 
+            public_key: felt252, signature: (felt252, felt252)) {
+            let R1 = R.clone();
+            let G1 = B.clone();
+            let B1 = R.clone();
+            
+            let sig_verification = self.verify_signature(width, height, R, G, B, public_key, signature);
 
-            let orig_image = StructImage {R: R, G: G, B: B, width: width, height: height};
+            let orig_image = StructImage {R: R1, G: G1, B: B1, width: width, height: height};
 
             // -------------------------------------
             // compress pixel values
